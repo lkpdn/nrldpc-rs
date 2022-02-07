@@ -234,3 +234,7 @@ pub fn modulate(g_seqs: ArrayView1<u8>) -> Array1<(f64, f64)> {
     }
     return h_seq;
 }
+
+pub fn demodulate(h_seq: ArrayView1<(f64, f64)>) -> ArrayView1<u8> {
+    panic!("unimplemented");
+}
