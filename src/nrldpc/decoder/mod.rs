@@ -1,3 +1,6 @@
+mod aminstar;
+mod dc;
+
 use ndarray::Array1;
 use ndarray::ArrayView1;
 use ndarray::ArrayView2;
@@ -8,7 +11,7 @@ pub trait NRLDPCDecoder {
         bg: ArrayView2<i16>,
         code_rate: f32,
         z: usize,
-        input: ArrayView1<i16>,
+        channel_llr: ArrayView1<f64>,
         max_iter: usize,
         early_termination: bool,
     ) -> Array1<u8>;

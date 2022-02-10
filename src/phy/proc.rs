@@ -9,6 +9,7 @@ use ndarray::ArrayView;
 use ndarray::ArrayView1;
 use ndarray::ArrayView2;
 use ndarray::Axis;
+use num_complex::Complex64;
 
 use crate::consts::bg::*;
 use crate::consts::mcs;
@@ -166,44 +167,44 @@ pub fn cb_concat(f_seqs: &Vec<Array1<u8>>) -> Array1<u8> {
     .unwrap();
 }
 
-pub fn modulate(g_seqs: ArrayView1<u8>) -> Array1<(f64, f64)> {
+pub fn modulate(g_seqs: ArrayView1<u8>) -> Array1<Complex64> {
     let mcs_table_idx = params::MCS_TABLE_IDX;
     let mcs_idx = params::MCS_IDX;
 
     let qm = mcs::modulation_order(mcs_table_idx, mcs_idx);
 
-    let mut h_seq = Array::from_elem(g_seqs.dim() / qm, (0., 0.));
+    let mut h_seq = Array::from_elem(g_seqs.dim() / qm, Complex64::new(0., 0.));
     match qm {
         1 => {
             for i in 0..g_seqs.dim() {
-                h_seq[i].0 = (1. / sqrt(2.)) * (1. - g_seqs[i] as f64);
-                h_seq[i].1 = (1. / sqrt(2.)) * (1. - g_seqs[i] as f64);
+                h_seq[i].re = (1. / sqrt(2.)) * (1. - g_seqs[i] as f64);
+                h_seq[i].im = (1. / sqrt(2.)) * (1. - g_seqs[i] as f64);
             }
         }
         2 => {
             for i in 0..g_seqs.dim() / 2 {
-                h_seq[i].0 = (1. / sqrt(2.)) * (1. - g_seqs[2 * i] as f64);
-                h_seq[i].1 = (1. / sqrt(2.)) * (1. - g_seqs[2 * i + 1] as f64);
+                h_seq[i].re = (1. / sqrt(2.)) * (1. - g_seqs[2 * i] as f64);
+                h_seq[i].im = (1. / sqrt(2.)) * (1. - g_seqs[2 * i + 1] as f64);
             }
         }
         4 => {
             for i in 0..g_seqs.dim() / 4 {
-                h_seq[i].0 = (1. / sqrt(10.))
+                h_seq[i].re = (1. / sqrt(10.))
                     * (1. - 2. * g_seqs[4 * i] as f64)
                     * (2. - (1. - 2. * g_seqs[4 * i + 2] as f64));
-                h_seq[i].1 = (1. / sqrt(10.))
+                h_seq[i].im = (1. / sqrt(10.))
                     * (1. - 2. * g_seqs[4 * i + 1] as f64)
                     * (2. - (1. - 2. * g_seqs[4 * i + 3] as f64));
             }
         }
         6 => {
             for i in 0..g_seqs.dim() / 6 {
-                h_seq[i].0 = (1. / sqrt(42.))
+                h_seq[i].re = (1. / sqrt(42.))
                     * (1. - 2. * g_seqs[6 * i] as f64)
                     * (4.
                         - (1. - 2. * g_seqs[6 * i + 2] as f64)
                             * (2. - (1. - 2. * g_seqs[6 * i + 4] as f64)));
-                h_seq[i].1 = (1. / sqrt(42.))
+                h_seq[i].im = (1. / sqrt(42.))
                     * (1. - 2. * g_seqs[6 * i + 1] as f64)
                     * (4.
                         - (1. - 2. * g_seqs[6 * i + 3] as f64)
@@ -212,14 +213,14 @@ pub fn modulate(g_seqs: ArrayView1<u8>) -> Array1<(f64, f64)> {
         }
         8 => {
             for i in 0..g_seqs.dim() / 8 {
-                h_seq[i].0 = (1. / sqrt(170.))
+                h_seq[i].re = (1. / sqrt(170.))
                     * (1. - 2. * g_seqs[8 * i] as f64)
                     * (8.
                         - (1. - 2. * g_seqs[8 * i + 2] as f64)
                             * (4.
                                 - (1. - 2. * g_seqs[8 * i + 4] as f64)
                                     * (2. - (1. - 2. * g_seqs[8 * i + 6] as f64))));
-                h_seq[i].1 = (1. / sqrt(170.))
+                h_seq[i].im = (1. / sqrt(170.))
                     * (1. - 2. * g_seqs[8 * i + 1] as f64)
                     * (8.
                         - (1. - 2. * g_seqs[8 * i + 3] as f64)
@@ -235,6 +236,6 @@ pub fn modulate(g_seqs: ArrayView1<u8>) -> Array1<(f64, f64)> {
     return h_seq;
 }
 
-pub fn demodulate(h_seq: ArrayView1<(f64, f64)>) -> ArrayView1<u8> {
+pub fn demodulate(h_seq: ArrayView1<Complex64>) -> ArrayView1<u8> {
     panic!("unimplemented");
 }
