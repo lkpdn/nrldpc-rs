@@ -4,7 +4,6 @@ use ndarray::Array1;
 use ndarray::Array2;
 use ndarray::ArrayView1;
 use ndarray::ArrayView2;
-use ndarray::ArrayViewMut1;
 use ndarray::ArrayViewMut2;
 use ndarray::Axis;
 use ndarray::Slice;
@@ -44,7 +43,7 @@ fn projection_d(mut sl: ArrayViewMut2<f64>) -> ArrayViewMut2<f64> {
 }
 
 // Concur Projection
-fn projection_c(mut treg_next: ArrayView2<f64>, ec: ArrayView1<f64>) -> Array1<f64> {
+fn projection_c(treg_next: ArrayView2<f64>, ec: ArrayView1<f64>) -> Array1<f64> {
     let cnt = ec.dim();
     let mut b = Array1::<f64>::zeros(cnt);
     for r in 0..cnt {
@@ -86,7 +85,7 @@ impl NRLDPCDecoder for NRLDPCDCDecoder {
         let mut r_m_i = 0;
         for i in 0..m_rm {
             r_m_idx[i].0 = r_m_i;
-            for (j, &v) in bg
+            for (j, _) in bg
                 .slice(s![i, ..n_rm])
                 .iter()
                 .enumerate()
@@ -94,11 +93,12 @@ impl NRLDPCDecoder for NRLDPCDCDecoder {
             {
                 let x = mul_shift(p.slice(s![j * z..(j + 1) * z]), *bg.get((i, j)).unwrap());
                 treg.index_axis_mut(Axis(0), r_m_i).assign(&x);
-                r_n_idx[j].push(i);
+                r_n_idx[j].push(r_m_i);
                 r_m_i += 1;
             }
             r_m_idx[i].1 = r_m_i;
         }
+
         // energy constraint
         let mut ec = p.to_owned();
 
@@ -112,7 +112,7 @@ impl NRLDPCDecoder for NRLDPCDCDecoder {
                 if start == end {
                     continue;
                 }
-                let mut sl = treg_next.slice_axis_mut(Axis(0), Slice::from(start..end));
+                let sl = treg_next.slice_axis_mut(Axis(0), Slice::from(start..end));
                 projection_d(sl);
             }
             let diff = treg_next - treg.clone();
@@ -120,13 +120,13 @@ impl NRLDPCDecoder for NRLDPCDCDecoder {
 
             // energy constraint
             let e_max = -(1. + self.e_max_epsilon) * sum_llr;
-            let mut ec_diff =
+            let ec_diff =
                 -(ch_llr.t().dot(&ec) + e_max) * ch_llr.to_owned() / ch_llr.t().dot(&ch_llr);
             let ec_overshoot = ec + 2. * ec_diff.clone();
 
             // concur
             for (j, v) in r_n_idx.iter().enumerate() {
-                let mut sl = q.select(Axis(0), &v[..]);
+                let sl = q.select(Axis(0), &v[..]);
                 let p_c = projection_c(sl.view(), ec_overshoot.slice(s![j * z..(j + 1) * z]));
                 p_c.assign_to(b.slice_mut(s![j * z..(j + 1) * z]));
                 for &si in v {
@@ -150,10 +150,32 @@ impl NRLDPCDecoder for NRLDPCDCDecoder {
     }
 }
 
+impl Default for NRLDPCDCDecoder {
+    fn default() -> NRLDPCDCDecoder {
+        NRLDPCDCDecoder { e_max_epsilon: 0.5 }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::consts::bg::*;
+    use ndarray::array;
+    use ndarray::Array;
+    use ndarray::ArrayView;
 
     #[test]
-    fn test_decode() {}
+    fn test_decode() {
+        let channel_llr = vec![1.5, 0.08, -0.2, -1.9, 1.5, -1.3, 1.1, -1.2];
+        let decoder = NRLDPCDCDecoder::default();
+        let cword = decoder.decode(
+            unsafe { ArrayView::from_shape_ptr((5, 8), &BG_TEST_1 as *const i16) },
+            0.5,
+            1,
+            Array::from_vec(channel_llr).view(),
+            10,
+            false,
+        );
+        assert_eq!(cword.view(), array![0, 0, 1, 1, 0, 1, 0, 0].view());
+    }
 }

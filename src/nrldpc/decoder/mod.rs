@@ -1,5 +1,6 @@
 mod aminstar;
 mod dc;
+mod rn;
 
 use ndarray::Array1;
 use ndarray::ArrayView1;

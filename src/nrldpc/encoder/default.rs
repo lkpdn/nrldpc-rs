@@ -68,7 +68,8 @@ mod tests {
     #[test]
     fn test_encode() {
         let msg = vec![0, 1, 1];
-        let cword = nrldpc_encode(
+        let encoder = NRLDPCDefaultEncoder {};
+        let cword = encoder.encode(
             unsafe { ArrayView::from_shape_ptr((5, 8), &BG_TEST_1 as *const i16) },
             1,
             Array::from_vec(msg).view(),

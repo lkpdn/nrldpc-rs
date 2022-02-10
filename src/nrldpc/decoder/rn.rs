@@ -1,3 +1,4 @@
+use libm::{exp2, log, log2};
 use ndarray::s;
 use ndarray::Array1;
 use ndarray::Array2;
@@ -9,12 +10,13 @@ use super::NRLDPCDecoder;
 use crate::util::cword_valid;
 use crate::util::mul_shift;
 
-pub struct NRLDPCAMinStarDecoder {
-    pub scale: f64,
-    pub offset: f64,
+/* Richardson-Novichkov decoder */
+pub struct NRLDPCRNDecoder {
+    pub c1: usize,
+    pub c2: usize,
 }
 
-impl NRLDPCDecoder for NRLDPCAMinStarDecoder {
+impl NRLDPCDecoder for NRLDPCRNDecoder {
     fn decode(
         &self,
         bg: ArrayView2<i16>,
@@ -36,12 +38,10 @@ impl NRLDPCDecoder for NRLDPCAMinStarDecoder {
         let mut stored = Array2::<f64>::zeros((slen, z));
         let mut output = channel_llr.to_owned();
 
-        // TODO: do we accept 2Z punctured input?
-        //output.slice_mut(s![..2 * z]).fill(0);
-
         let mut itr = 0;
         let mut ri;
         let mut ti;
+        let delta: f64 = log(2.);
         while itr < max_iter {
             ri = 0;
             for i in 0..m_rm {
@@ -60,36 +60,24 @@ impl NRLDPCDecoder for NRLDPCAMinStarDecoder {
                     ri += 1;
                 }
                 for k in 0..z {
-                    let (mut min1, mut min2) = (f64::MAX, f64::MAX);
-                    let mut pos1 = 0;
-                    for (l, v) in treg.slice(s![..ti, k]).iter().enumerate() {
-                        if v.abs() < min1 {
-                            if min1 != f64::MAX {
-                                min2 = min1;
-                            }
-                            min1 = v.abs();
-                            pos1 = l;
-                        } else if v.abs() < min2 {
-                            /* Notice that v.abs() may equal to min2 */
-                            min2 = v.abs();
-                        }
-                    }
-                    assert!(min1 != f64::MAX);
-                    assert!(min2 != f64::MAX);
-                    let sign = treg
+                    // TODO: change all exp2 below to bit shift operation
+                    let sum_inner: f64 = treg
                         .slice(s![..ti, k])
-                        .map(|x| if *x == 0. { 1. } else { x.signum() })
+                        .iter()
+                        .map(|&x| exp2(-1. * x.abs() / delta))
+                        .sum();
+                    let alpha_all: f64 = treg
+                        .slice(s![..ti, k])
+                        .iter()
+                        .map(|&x| if x == 0. { 1. } else { x.signum() })
                         .product();
-                    treg.slice_mut(s![..ti, k])
-                        .iter_mut()
-                        .enumerate()
-                        .for_each(|(l, v)| {
-                            if l == pos1 {
-                                *v = sign * min2;
-                            } else {
-                                *v = sign * min1;
-                            }
-                        });
+                    for v in treg.slice_mut(s![..ti, k]).iter_mut() {
+                        let alpha = if *v == 0. { 1. } else { v.signum() };
+                        *v = (alpha_all * alpha)
+                            * (self.c1 as f64
+                                - log2(sum_inner - exp2(-1. * v.abs() / delta) + self.c2 as f64)
+                                    .round());
+                    }
                 }
                 ri -= ti;
                 ti = 0;
@@ -120,12 +108,9 @@ impl NRLDPCDecoder for NRLDPCAMinStarDecoder {
     }
 }
 
-impl Default for NRLDPCAMinStarDecoder {
-    fn default() -> NRLDPCAMinStarDecoder {
-        NRLDPCAMinStarDecoder {
-            offset: 0.,
-            scale: 1.,
-        }
+impl Default for NRLDPCRNDecoder {
+    fn default() -> NRLDPCRNDecoder {
+        NRLDPCRNDecoder { c1: 0, c2: 0 }
     }
 }
 
@@ -140,7 +125,7 @@ mod tests {
     #[test]
     fn test_decode() {
         let input = vec![-3., 4., -1., 10., -5., 2., 0., 1.];
-        let decoder = NRLDPCAMinStarDecoder::default();
+        let decoder = NRLDPCRNDecoder::default();
         let cword = decoder.decode(
             unsafe { ArrayView::from_shape_ptr((5, 8), &BG_TEST_1 as *const i16) },
             0.5,
@@ -149,6 +134,6 @@ mod tests {
             10,
             false,
         );
-        assert_eq!(cword.view(), array![1, 0, 0, 0, 1, 0, 1, 0].view());
+        assert_eq!(cword.view(), array![0, 0, 0, 0, 1, 0, 1, 0].view());
     }
 }
